@@ -29,19 +29,22 @@ enum ColliderType
 
 @implementation GameScene
 
+// MIDI Stuff
+const int kStartOctave = 1;
+
 // Boundry Information
 const int kMIDILeft  = 48;
 const int kMIDIRight = 72;
 
 // Block Info
-const CGFloat kBlockGridSize	= 32;
+const CGFloat kBlockGridSize	= 16;
 const CGFloat kBlockRatio		= 0.4;
 const CGFloat kBlockGridMargin	= 1;
 
 // Paddle Info
 const CGFloat kPaddleWidth	= 120;
 const CGFloat kPaddleHeight	= 14;
-const CGFloat kPaddleY		= 40;
+const CGFloat kPaddleInset	= 40;
 
 // Ball Info
 const CGFloat kBallRadius	= 6;
@@ -51,26 +54,6 @@ const CGFloat kBallVelocityY= 600;
 //======================================================================
 #pragma mark Footer Guide
 //======================================================================
-
-- (void)addGuide
-{
-	for (int i = kMIDILeft; i < kMIDIRight; i++)
-	{
-		const int fontSize = 18;
-		
-		SKLabelNode *label = [SKLabelNode node];
-		label.text = [MIDIMessage getNameForNote:i];
-		label.fontColor = [SKColor whiteColor];
-		label.fontSize = fontSize;
-		
-		int x = [self getPositionForMIDINote:i].x;
-		int y = fontSize;
-		
-		label.position = CGPointMake(x, y);
-		
-		[self addChild:label];
-	}
-}
 
 //======================================================================
 #pragma mark Blocks
@@ -118,46 +101,46 @@ const CGFloat kBallVelocityY= 600;
 #pragma mark Paddle
 //======================================================================
 
-- (void)addPaddle
+- (CGPoint)getStartPositionForPaddle:(int)identifier
 {
-	SKSpriteNode *paddle = [SKSpriteNode spriteNodeWithColor:[SKColor greenColor] size:CGSizeMake(kPaddleWidth, kPaddleHeight)];
-	paddle.name = @"Paddle";
-	paddle.position = CGPointMake(CGRectGetMidX(self.frame), kPaddleY);
-	paddle.physicsBody = [SKPhysicsBody bodyWithRectangleOfSize:paddle.size];
-	paddle.physicsBody.dynamic = false;
-	[self addChild:paddle];
-}
-
-- (SKNode*)paddleNode
-{
-	return [self childNodeWithName:@"Paddle"];
-}
-
-- (void)movePaddle
-{
-	float normalisedPitchBendOffset = ((pbOffset - 8192) / 8192.f) * 13;
-	// Need to filter pb reset messages
-	if (normalisedPitchBendOffset > 12 || normalisedPitchBendOffset < -12)
+	switch (identifier)
 	{
-		return;
+		case 1: return CGPointMake(CGRectGetMidX(self.frame), kPaddleInset);
+		case 2: return CGPointMake(CGRectGetMidX(self.frame), CGRectGetHeight(self.frame) - kPaddleInset);
+		case 3: return CGPointMake(kPaddleInset, CGRectGetMidY(self.frame));
+		case 4: return CGPointMake(CGRectGetWidth(self.frame) - kPaddleInset, CGRectGetMidY(self.frame));
 	}
-	
-	float derivedNote = noteValue + normalisedPitchBendOffset;
-	
-	[self paddleNode].position = [self getPositionForMIDINote:derivedNote];
+	return CGPointMake(0, 0);
 }
 
-- (CGPoint)getPositionForMIDINote:(float)note
+- (CGSize)getSizeForPaddle:(int)identifier
 {
-	note = (note < kMIDILeft ? kMIDILeft : note);
-	note = (note > kMIDIRight ? kMIDIRight : note);
-	
-	int noteCount = kMIDIRight - kMIDILeft;
-	CGFloat normalisedPosition = (note - kMIDILeft) / (float)noteCount;
-	
-	CGFloat paddleX = self.frame.size.width * normalisedPosition;
-	
-	return CGPointMake(paddleX, kPaddleY);
+	switch (identifier)
+	{
+		case 1: return CGSizeMake(kPaddleWidth, kPaddleHeight);
+		case 2: return CGSizeMake(kPaddleWidth, kPaddleHeight);
+		case 3: return CGSizeMake(kPaddleHeight, kPaddleWidth);
+		case 4: return CGSizeMake(kPaddleHeight, kPaddleWidth);
+	}
+	return CGSizeMake(0, 0);
+}
+
+- (void)addPaddles
+{
+	for (int i = 1; i <= 4; i++)
+	{
+		SKSpriteNode *paddle = [SKSpriteNode spriteNodeWithColor:[SKColor greenColor] size:[self getSizeForPaddle:i]];
+		paddle.name = [NSString stringWithFormat:@"Paddle%d", i];
+		paddle.position = [self getStartPositionForPaddle:i];
+		paddle.physicsBody = [SKPhysicsBody bodyWithRectangleOfSize:paddle.size];
+		paddle.physicsBody.dynamic = false;
+		[self addChild:paddle];
+	}
+}
+
+- (SKNode*)paddleNode:(int)identifier
+{
+	return [self childNodeWithName:[NSString stringWithFormat:@"Paddle%d",identifier]];
 }
 
 //======================================================================
@@ -168,8 +151,8 @@ const CGFloat kBallVelocityY= 600;
 {
 	SKShapeNode *ball = [SKShapeNode node];
 	ball.name = @"Ball";
-	ball.position = CGPointMake(CGRectGetMidX([self paddleNode].frame),
-								CGRectGetMaxY([self paddleNode].frame));
+	ball.position = CGPointMake(CGRectGetMidX(self.frame),
+								CGRectGetMaxY(self.frame));
 	
 	CGMutablePathRef path = CGPathCreateMutable();
 	CGPathAddArc(path, nil, 0, 0, kBallRadius, 0, M_PI * 2.0, true);
@@ -228,7 +211,6 @@ const CGFloat kBallVelocityY= 600;
 - (void)gameOver
 {
 	[[self ballNode] removeFromParent];
-	[self addInstructions];
 }
 
 - (void)didSimulatePhysics
@@ -250,34 +232,15 @@ const CGFloat kBallVelocityY= 600;
 	if (message.messageType == MIDIMessageTypeNoteOn)
 	{
 		noteValue = message.noteNo;
-		[self movePaddle];
+//		[self movePaddle:[self getPaddleForMidiNote:noteValue]];
 	}
 	else if (message.messageType == MIDIMessageTypePitchBend)
 	{
 		pbOffset = message.pitchbend;
-		[self movePaddle];
+//		[self movePaddle:[self getPaddleForMidiNote:noteValue]];
 	}
 }
 
-//======================================================================
-#pragma mark Instructions Label
-//======================================================================
-
-- (void)addInstructions
-{
-	SKLabelNode *instructions = [SKLabelNode node];
-	instructions.name = @"Instructions";
-	instructions.text = @"Click to Start";
-	instructions.fontColor = [SKColor whiteColor];
-	instructions.position = CGPointMake(CGRectGetMidX(self.frame),
-										CGRectGetMidY(self.frame));
-	[self addChild:instructions];
-}
-
-- (SKNode*)instructionsLabel
-{
-	return [self childNodeWithName:@"Instructions"];
-}
 
 //======================================================================
 #pragma mark Class Setup
@@ -298,9 +261,8 @@ const CGFloat kBallVelocityY= 600;
 		self.physicsWorld.contactDelegate = self;
 		
 		[self addBlocks:6];
-		[self addPaddle];
-		[self addInstructions];
-		[self addGuide];
+		[self addPaddles];
+
 		
 		_seaboard.delegate = self;
 		[_seaboard connect];
@@ -314,7 +276,6 @@ const CGFloat kBallVelocityY= 600;
 	if ([self ballNode] == nil)
 	{
 		[self addBall];
-		[[self instructionsLabel] removeFromParent];
 	}
 }
 
