@@ -39,7 +39,7 @@ const int kMIDIRight = 72;
 
 // Block Info
 const CGFloat kBlockGridSize	= 16;
-const CGFloat kBlockRatio		= 0.4;
+const CGFloat kBlockRatio		= 0.46;
 const CGFloat kBlockGridMargin	= 1;
 
 // Paddle Info
@@ -204,7 +204,36 @@ const CGFloat kBallVelocityY= 600;
 #pragma mark Scores
 //======================================================================
 
+- (CGPoint)getLabelPositionForIdentifier:(int)identifier
+{
+	const int scoreIndent = (CGRectGetWidth(self.frame) * (1 - kBlockRatio) / 4) + (kPaddleInset / 2);
+	
+	switch (identifier)
+	{
+		case 1: return CGPointMake(CGRectGetMidX(self.frame), scoreIndent);
+		case 2: return CGPointMake(CGRectGetMidX(self.frame), CGRectGetHeight(self.frame) - scoreIndent);
+		case 3: return CGPointMake(scoreIndent, CGRectGetMidY(self.frame));
+		case 4: return CGPointMake(CGRectGetWidth(self.frame) - scoreIndent, CGRectGetMidY(self.frame));
+			
+		default: break;
+	}
+	return CGPointMake(0, 0);
+}
 
+- (void)addScoreLabel
+{
+	for (int i = 0; i < [self.gameData count]; i++)
+	{
+		SKLabelNode *label = [SKLabelNode labelNodeWithText:@"0"];
+		label.horizontalAlignmentMode = SKLabelHorizontalAlignmentModeCenter;
+		label.verticalAlignmentMode = SKLabelVerticalAlignmentModeCenter;
+		label.fontSize = 100.f;
+		label.fontName = @"Helvetica-Bold";
+		label.fontColor = [SKColor darkGrayColor];
+		label.position = [self getLabelPositionForIdentifier:i+1];
+		[self addChild:label];
+	}
+}
 
 //======================================================================
 #pragma mark Game Mechanics
@@ -287,6 +316,7 @@ const CGFloat kBallVelocityY= 600;
 		
 		[self addBlocks:6];
 		[self addPaddles];
+		[self addScoreLabel];
 
 		
 		_seaboard.delegate = self;
