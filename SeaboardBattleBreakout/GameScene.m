@@ -52,9 +52,34 @@ const CGFloat kBallRadius	= 6;
 const CGFloat kBallVelocityX= 500;
 const CGFloat kBallVelocityY= 600;
 
+// Wall Info
+const CGFloat kWallSize		= 120;
+const CGFloat kWallThickness= 4;
+
 //======================================================================
-#pragma mark Footer Guide
+#pragma mark Walls
 //======================================================================
+
+- (void)addWalls
+{
+	const float screenWidth = self.frame.size.width;
+	const float screenHeight = self.frame.size.height;
+	const float widths[8]  = {kWallSize, kWallSize, kWallThickness, kWallThickness, kWallSize, kWallSize, kWallThickness, kWallThickness};
+	const float heights[8] = {kWallThickness, kWallThickness, kWallSize, kWallSize, kWallThickness, kWallThickness, kWallSize, kWallSize};
+	const float x[8] = {kWallSize/2, screenWidth - kWallSize/2, screenWidth - kWallThickness, screenWidth - kWallThickness, screenWidth - kWallSize/2, kWallSize/2, kWallThickness, kWallThickness};
+	const float y[8] = {kWallThickness, kWallThickness, kWallSize/2, screenHeight - kWallSize/2, screenHeight - kWallThickness, screenHeight - kWallThickness, screenHeight - kWallSize/2, kWallSize/2};
+	
+	for (int i = 0; i < 8; i++)
+	{
+		SKShapeNode *node = [SKShapeNode shapeNodeWithRectOfSize:CGSizeMake(widths[i], heights[i])];
+		node.fillColor = [SKColor lightGrayColor];
+		node.position = CGPointMake(x[i], y[i]);
+		node.physicsBody = [SKPhysicsBody bodyWithRectangleOfSize:node.frame.size];
+		node.physicsBody.dynamic = false;
+		[self addChild:node];
+	}
+	
+}
 
 //======================================================================
 #pragma mark Blocks
@@ -333,6 +358,7 @@ const CGFloat kBallVelocityY= 600;
 		[self addBlocks:6];
 		[self addPaddles];
 		[self addScoreLabel];
+		[self addWalls];
 
 		
 		_seaboard.delegate = self;
