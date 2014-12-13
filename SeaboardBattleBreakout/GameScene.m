@@ -22,6 +22,7 @@ enum ColliderType
 	int pbOffset;
 }
 
+@property (nonatomic, retain) NSArray *gameData;
 @property (nonatomic, retain) Seaboard* seaboard;
 
 @end
@@ -48,7 +49,7 @@ const CGFloat kPaddleInset	= 40;
 
 // Ball Info
 const CGFloat kBallRadius	= 6;
-const CGFloat kBallVelocityX= 600;
+const CGFloat kBallVelocityX= 500;
 const CGFloat kBallVelocityY= 600;
 
 //======================================================================
@@ -59,10 +60,10 @@ const CGFloat kBallVelocityY= 600;
 #pragma mark Blocks
 //======================================================================
 
-- (SKNode*)newBlock:(CGFloat)width :(CGFloat)height
+- (SKNode*)newBlock:(CGFloat)width :(CGFloat)height :(NSString*)identifier :(SKColor*)colour
 {
-	SKSpriteNode *block = [SKSpriteNode spriteNodeWithColor:[SKColor colorWithRed:57/255.0 green:127/255.0 blue:186/255.0 alpha:1.0] size:CGSizeMake(width, height)];
-	block.name = @"Block";
+	SKSpriteNode *block = [SKSpriteNode spriteNodeWithColor:colour size:CGSizeMake(width, height)];
+	block.name = identifier;
 	block.physicsBody = [SKPhysicsBody bodyWithRectangleOfSize:block.size];
 	block.physicsBody.dynamic = false;
 	block.physicsBody.categoryBitMask = ColliderCategoryBlock;
@@ -73,6 +74,11 @@ const CGFloat kBallVelocityY= 600;
 
 - (void)addBlocks:(int)rows
 {
+	const int numberOfBlocks = kBlockGridSize * kBlockGridSize;
+	const int blocksPerColour = ceil(numberOfBlocks / 4.f);
+	int colourTracker[4] = { blocksPerColour, blocksPerColour, blocksPerColour, blocksPerColour };
+	
+	
 	const CGFloat blockAreaWidth  = kBlockRatio * CGRectGetWidth(self.frame);
 	const CGFloat blockAreaHeight = kBlockRatio * CGRectGetHeight(self.frame);
 	
@@ -86,7 +92,17 @@ const CGFloat kBallVelocityY= 600;
 	{
 		for (CGFloat y = yStart; y < blockAreaHeight + yStart; y += blockHeight + kBlockGridMargin)
 		{
-			SKNode *block = [self newBlock:blockWidth :blockHeight];
+			int random = arc4random() % [self.gameData count];
+			while (colourTracker[random] <= 0)
+			{
+				random = arc4random() % [self.gameData count];
+			}
+			
+			SKColor* colour = [[self.gameData objectAtIndex:random] objectForKey:@"colour"];
+			NSString *identifier = [NSString stringWithFormat:@"Block%d", random+1];
+			colourTracker[random]--;
+			
+			SKNode *block = [self newBlock:blockWidth :blockHeight :identifier :colour];
 			block.position = CGPointMake(x, y);
 		}
 	}
@@ -125,11 +141,17 @@ const CGFloat kBallVelocityY= 600;
 	return CGSizeMake(0, 0);
 }
 
+- (SKColor*)getColourForPaddle:(int)identifier
+{
+	NSDictionary *data = [self.gameData objectAtIndex:(identifier - 1)];
+	return [data objectForKey:@"colour"];
+}
+
 - (void)addPaddles
 {
 	for (int i = 1; i <= 4; i++)
 	{
-		SKSpriteNode *paddle = [SKSpriteNode spriteNodeWithColor:[SKColor greenColor] size:[self getSizeForPaddle:i]];
+		SKSpriteNode *paddle = [SKSpriteNode spriteNodeWithColor:[self getColourForPaddle:i] size:[self getSizeForPaddle:i]];
 		paddle.name = [NSString stringWithFormat:@"Paddle%d", i];
 		paddle.position = [self getStartPositionForPaddle:i];
 		paddle.physicsBody = [SKPhysicsBody bodyWithRectangleOfSize:paddle.size];
@@ -151,8 +173,7 @@ const CGFloat kBallVelocityY= 600;
 {
 	SKShapeNode *ball = [SKShapeNode node];
 	ball.name = @"Ball";
-	ball.position = CGPointMake(CGRectGetMidX(self.frame),
-								CGRectGetMaxY(self.frame));
+	ball.position = CGPointMake(100, 100);
 	
 	CGMutablePathRef path = CGPathCreateMutable();
 	CGPathAddArc(path, nil, 0, 0, kBallRadius, 0, M_PI * 2.0, true);
@@ -178,6 +199,12 @@ const CGFloat kBallVelocityY= 600;
 {
 	return [self childNodeWithName:@"Ball"];
 }
+
+//======================================================================
+#pragma mark Scores
+//======================================================================
+
+
 
 //======================================================================
 #pragma mark Game Mechanics
@@ -215,11 +242,7 @@ const CGFloat kBallVelocityY= 600;
 
 - (void)didSimulatePhysics
 {
-	if ([self ballNode] != nil &&
-		[self ballNode].position.y < (kBallRadius * 2.0))
-	{
-		[self gameOver];
-	}
+
 }
 
 //======================================================================
@@ -255,10 +278,12 @@ const CGFloat kBallVelocityY= 600;
 		pbOffset = 0;
 		
 		_seaboard = [[Seaboard alloc] init];
+		[self setupGameData];
 		
 		self.physicsBody = [SKPhysicsBody bodyWithEdgeLoopFromRect:self.frame];
 		self.physicsBody.friction = 0.0;
 		self.physicsWorld.contactDelegate = self;
+		NSLog(@"%@", NSStringFromRect(self.frame));
 		
 		[self addBlocks:6];
 		[self addPaddles];
@@ -267,9 +292,24 @@ const CGFloat kBallVelocityY= 600;
 		_seaboard.delegate = self;
 		[_seaboard connect];
 		
-		self.backgroundColor = [SKColor colorWithRed:50/255.0 green:61/255.0 blue:71/255.0 alpha:1.0];
+		self.backgroundColor = [SKColor colorWithWhite:0.2 alpha:1.0];
 	}
 	return self;
+}
+
+- (void)setupGameData
+{
+	NSArray *colours = @[[SKColor redColor], [SKColor greenColor], [SKColor yellowColor], [SKColor blueColor]];
+	NSMutableArray *mutableGameData = [NSMutableArray array];
+	
+	for (int i = 0; i < [colours count]; i++)
+	{
+		NSMutableDictionary *data = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+									 [colours objectAtIndex:i], @"colour",
+									 [NSNumber numberWithInt:0], @"score", nil];
+		[mutableGameData addObject:data];
+	}
+	self.gameData = [NSArray arrayWithArray:mutableGameData];
 }
 
 -(void)mouseDown:(NSEvent *)theEvent {
