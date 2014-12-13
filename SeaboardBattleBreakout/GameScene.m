@@ -110,6 +110,12 @@ const CGFloat kBallVelocityY= 600;
 
 - (void)blockTouched:(SKNode*) block
 {
+	NSString *scorerString = [[block name] stringByReplacingOccurrencesOfString:@"Block" withString:@""];
+	int scorer = [scorerString intValue];
+	NSNumber* score = [[self.gameData objectAtIndex:scorer-1] objectForKey:@"score"];
+	score = [NSNumber numberWithInt:[score intValue] + 1];
+	[[self.gameData objectAtIndex:scorer-1] setObject:score forKey:@"score"];
+	
 	[block removeFromParent];
 }
 
@@ -225,6 +231,7 @@ const CGFloat kBallVelocityY= 600;
 	for (int i = 0; i < [self.gameData count]; i++)
 	{
 		SKLabelNode *label = [SKLabelNode labelNodeWithText:@"0"];
+		label.name = [NSString stringWithFormat:@"Label%d",i+1];
 		label.horizontalAlignmentMode = SKLabelHorizontalAlignmentModeCenter;
 		label.verticalAlignmentMode = SKLabelVerticalAlignmentModeCenter;
 		label.fontSize = 100.f;
@@ -232,6 +239,15 @@ const CGFloat kBallVelocityY= 600;
 		label.fontColor = [SKColor darkGrayColor];
 		label.position = [self getLabelPositionForIdentifier:i+1];
 		[self addChild:label];
+	}
+}
+
+- (void)updateLabels
+{
+	for (int i = 0; i < [self.gameData count]; i++)
+	{
+		int score = [[[self.gameData objectAtIndex:i] objectForKey:@"score"] intValue];
+		[(SKLabelNode*)[self childNodeWithName:[NSString stringWithFormat:@"Label%d", i+1]] setText:[NSString stringWithFormat:@"%d", score]];
 	}
 }
 
@@ -351,6 +367,7 @@ const CGFloat kBallVelocityY= 600;
 
 -(void)update:(CFTimeInterval)currentTime {
 	/* Called before each frame is rendered */
+	[self updateLabels];
 }
 
 @end
