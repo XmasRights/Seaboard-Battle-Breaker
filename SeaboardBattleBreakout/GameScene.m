@@ -13,13 +13,16 @@
 enum ColliderType
 {
 	ColliderCategoryBlock = 1,
-	ColliderCategoryBall  = 2
+	ColliderCategoryBall  = 2,
+	ColliderCategoryEdge  = 4
 };
 
 @interface GameScene () <SKPhysicsContactDelegate, SeaboardDelegate>
 {
 	int noteValue;
 	int pbOffset;
+	float freezeTime[4];
+	CFTimeInterval timeTracker;
 }
 
 @property (nonatomic, retain) NSArray *gameData;
@@ -49,13 +52,15 @@ const CGFloat kPaddleInset	= 40;
 
 // Ball Info
 const CGFloat kBallRadius	= 6;
-const CGFloat kBallVelocityX= 500;
-const CGFloat kBallVelocityY= 600;
+const CGFloat kBallVelocityX= 400;
+const CGFloat kBallVelocityY= 513;
 
 // Wall Info
 const CGFloat kWallSize		= 120;
 const CGFloat kWallThickness= 4;
 
+// Game Variables
+const float kFreezeTime = 2.f;
 //======================================================================
 #pragma mark Walls
 //======================================================================
@@ -78,7 +83,37 @@ const CGFloat kWallThickness= 4;
 		node.physicsBody.dynamic = false;
 		[self addChild:node];
 	}
+}
+
+- (void)addEdges
+{
+	const float screenWidth = self.frame.size.width;
+	const float screenHeight = self.frame.size.height;
+	const float thickness = 8.f;
 	
+	const float widths[4] = { screenWidth, screenWidth, thickness, thickness };
+	
+	const float heights[4] = { thickness, thickness, screenHeight, screenHeight };
+	const float x[4] = { screenWidth / 2,  screenWidth / 2, 0, screenWidth};
+	const float y[4] = { 0, screenHeight, screenHeight / 2, screenHeight / 2 };
+	
+	for (int i = 0; i < 4; i++)
+	{
+		SKShapeNode *node = [SKShapeNode shapeNodeWithRectOfSize:CGSizeMake(widths[i], heights[i])];
+		node.name = [NSString stringWithFormat:@"Wall%d", i+1];
+		node.fillColor = [SKColor whiteColor];
+		node.position = CGPointMake(x[i], y[i]);
+		node.physicsBody = [SKPhysicsBody bodyWithRectangleOfSize:node.frame.size];
+		node.physicsBody.dynamic = false;
+		node.physicsBody.categoryBitMask = ColliderCategoryEdge;
+		[self addChild:node];
+	}
+}
+
+- (void)edgeTouched:(SKNode*)edge
+{
+	int edgeIndex = [[edge.name stringByReplacingOccurrencesOfString:@"Wall" withString:@""] intValue];
+	freezeTime[edgeIndex-1] = 2.f;
 }
 
 //======================================================================
@@ -196,6 +231,21 @@ const CGFloat kWallThickness= 4;
 	return [self childNodeWithName:[NSString stringWithFormat:@"Paddle%d",identifier]];
 }
 
+- (void)updatePaddles
+{
+	for (int i = 0; i < 4; i++)
+	{
+		if (freezeTime[i] > 0)
+		{
+			[(SKSpriteNode*)[self paddleNode:i+1] setAlpha:0.2];
+		}
+		else
+		{
+			[(SKSpriteNode*)[self paddleNode:i+1] setAlpha:1.0];
+		}
+	}
+}
+
 //======================================================================
 #pragma mark Ball
 //======================================================================
@@ -221,7 +271,7 @@ const CGFloat kWallThickness= 4;
 	ball.physicsBody.allowsRotation = false;
 	ball.physicsBody.usesPreciseCollisionDetection = true;
 	ball.physicsBody.categoryBitMask = ColliderCategoryBall;
-	ball.physicsBody.contactTestBitMask = ColliderCategoryBlock;
+	ball.physicsBody.contactTestBitMask = (ColliderCategoryBlock | ColliderCategoryEdge);
 	
 	[self addChild:ball];
 }
@@ -303,6 +353,14 @@ const CGFloat kWallThickness= 4;
 			[self blockTouched:firstBody.node];
 		}
 	}
+	
+	if(firstBody.categoryBitMask & ColliderCategoryBall)
+	{
+		if (secondBody.categoryBitMask & ColliderCategoryEdge)
+		{
+			if ([secondBody.node.name hasPrefix:@"Wall"]) [self edgeTouched:secondBody.node];
+		}
+	}
 }
 
 - (void)gameOver
@@ -346,18 +404,18 @@ const CGFloat kWallThickness= 4;
 	{
 		noteValue = 0;
 		pbOffset = 0;
+		for (int i = 0; i < 4; i++) freezeTime[i] = 0;
+		timeTracker = 0;
 		
 		_seaboard = [[Seaboard alloc] init];
 		[self setupGameData];
 		
-		self.physicsBody = [SKPhysicsBody bodyWithEdgeLoopFromRect:self.frame];
-		self.physicsBody.friction = 0.0;
 		self.physicsWorld.contactDelegate = self;
-		NSLog(@"%@", NSStringFromRect(self.frame));
 		
 		[self addBlocks:6];
 		[self addPaddles];
 		[self addScoreLabel];
+		[self addEdges];
 		[self addWalls];
 
 		
@@ -391,9 +449,24 @@ const CGFloat kWallThickness= 4;
 	}
 }
 
+- (void)updateFreezeTimers:(CFTimeInterval)elapsed
+{
+	for (int i =0; i < 4; i++)
+	{
+		if (freezeTime[i] > 0)
+		{
+			freezeTime[i] -= elapsed;
+		}
+	}
+}
+
 -(void)update:(CFTimeInterval)currentTime {
-	/* Called before each frame is rendered */
+	CFTimeInterval elapsed = currentTime - timeTracker;
+	timeTracker = currentTime;
+	
+	[self updateFreezeTimers:elapsed];
 	[self updateLabels];
+	[self updatePaddles];
 }
 
 @end
